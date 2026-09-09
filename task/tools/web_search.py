@@ -9,7 +9,7 @@ class WebSearchTool(BaseTool):
 
     def __init__(self, api_key: str, endpoint: str):
         self.__api_key = api_key
-        self.__endpoint = f"{endpoint}/openai/deployments/gemini-2.5-pro/chat/completions"
+        self.__endpoint = f"{endpoint.rstrip('/')}/openai/deployments/gemini-2.5-pro/chat/completions"
 
     # https://dialx.ai/dial_api#operation/sendChatCompletionRequest (-> tools -> function)
     # Sample of tool config:
@@ -35,25 +35,50 @@ class WebSearchTool(BaseTool):
 
     @property
     def name(self) -> str:
-        #TODO: Provide tool name as `web_search_tool`
-        raise NotImplementedError()
+        return "web_search_tool"
 
     @property
     def description(self) -> str:
-        #TODO: Provide description of this tool
-        raise NotImplementedError()
+        return "Search the web for current, public information using Google Search grounding."
 
     @property
     def input_schema(self) -> dict[str, Any]:
-        #TODO: Provide tool params Schema (it applies `request` string to search by)
-        raise NotImplementedError()
+        return {
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The search query or question to search for on the web"
+                }
+            },
+            "required": ["request"],
+            "additionalProperties": False
+        }
 
     def execute(self, arguments: dict[str, Any]) -> str:
-        #TODO:
-        # 1. Create `headers` dict: "api-key": self.__api_key, "Content-Type": "application/json"
-        # 2. Create `request_data` dict with:
-        #    - "messages": [{"role": "user", "content": str(arguments["request"])}]
-        #    - "tools": [{"type": "static_function", "static_function": {"name": "google_search", "description": "Grounding with Google Search","configuration": {}}}]
-        # 3. Make POST call with `requests` lib: `url=self.__endpoint, headers=headers, json=request_dat`
-        # 4. Check if response status is 200 and if yes then return message content, otherwise return `f"Error: {response.status_code} {response.text}"`
-        raise NotImplementedError()
+        query = arguments["request"]
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("The search request must be a non-empty string.")
+        response = requests.post(
+            url=self.__endpoint,
+            headers={"api-key": self.__api_key, "Content-Type": "application/json"},
+            json={
+                "messages": [{"role": "user", "content": query}],
+                "tools": [{
+                    "type": "static_function",
+                    "static_function": {
+                        "name": "google_search",
+                        "description": "Grounding with Google Search",
+                        "configuration": {}
+                    }
+                }]
+            },
+            timeout=60
+        )
+        if response.status_code != 200:
+            return f"Error: {response.status_code} {response.text}"
+        choices = response.json().get("choices")
+        if not choices:
+            raise ValueError("Web search returned no completion choices.")
+        return choices[0]["message"].get("content") or ""

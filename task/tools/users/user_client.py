@@ -16,18 +16,22 @@ class UserClient:
 
         return user_str
 
-    def __users_to_string(self, users: list[dict[str, Any]]):
+    def __users_to_string(self, users: list[dict[str, Any]], limit: int = 20):
         users_str = ""
-        for value in users:
+        displayed_users = users[:limit]
+        for value in displayed_users:
             users_str += self.__user_to_string(value)
-        users_str += "\n"
+        if len(users) > limit:
+            users_str += f"\nNote: Showing first {limit} of {len(users)} users. Refine your search criteria (e.g. name, surname, email) to narrow results.\n"
+        else:
+            users_str += "\n"
 
         return users_str
 
     def get_user(self, user_id: int) -> str:
         headers = {"Content-Type": "application/json"}
 
-        response = requests.get(url=f"{USER_SERVICE_ENDPOINT}/v1/users/{user_id}", headers=headers)
+        response = requests.get(url=f"{USER_SERVICE_ENDPOINT}/v1/users/{user_id}", headers=headers, timeout=30)
 
         if response.status_code == 200:
             data = response.json()
@@ -54,7 +58,9 @@ class UserClient:
         if gender:
             params["gender"] = gender
 
-        response = requests.get(url=USER_SERVICE_ENDPOINT + "/v1/users/search", headers=headers, params=params)
+        response = requests.get(
+            url=USER_SERVICE_ENDPOINT + "/v1/users/search", headers=headers, params=params, timeout=30
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -69,7 +75,8 @@ class UserClient:
         response = requests.post(
             url=f"{USER_SERVICE_ENDPOINT}/v1/users",
             headers=headers,
-            json=user_create_model.model_dump()
+            json=user_create_model.model_dump(),
+            timeout=30
         )
 
         if response.status_code == 201:
@@ -83,10 +90,11 @@ class UserClient:
         response = requests.put(
             url=f"{USER_SERVICE_ENDPOINT}/v1/users/{user_id}",
             headers=headers,
-            json=user_update_model.model_dump()
+            json=user_update_model.model_dump(exclude_unset=True),
+            timeout=30
         )
 
-        if response.status_code == 201:
+        if response.status_code in (200, 201, 204):
             return f"User successfully updated: {response.text}"
 
         raise Exception(f"HTTP {response.status_code}: {response.text}")
@@ -94,7 +102,7 @@ class UserClient:
     def delete_user(self, user_id: int) -> str:
         headers = {"Content-Type": "application/json"}
 
-        response = requests.delete(url=f"{USER_SERVICE_ENDPOINT}/v1/users/{user_id}", headers=headers)
+        response = requests.delete(url=f"{USER_SERVICE_ENDPOINT}/v1/users/{user_id}", headers=headers, timeout=30)
 
         if response.status_code == 204:
             return "User successfully deleted"
